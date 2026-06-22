@@ -1,0 +1,61 @@
+:root { font-family: Inter, system-ui, Segoe UI, sans-serif; color: #182233; background: #edf3f8; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; border: 1px solid #cdd9e5; background: #fff; border-radius: 8px; padding: 9px 12px; }
+main { min-height: 100vh; display: grid; grid-template-columns: 270px 1fr; }
+aside { background: #111827; color: #f8fafc; padding: 22px; }
+.brand { display: flex; gap: 12px; align-items: center; padding-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,.14); }
+.brand svg { color: #45c08a; }
+.brand span, header p, .stat span, small { color: #667085; }
+.brand span { color: #aab7c6; display: block; }
+nav { display: grid; gap: 8px; margin-top: 22px; }
+nav button { color: #dbe5f0; background: transparent; border: 0; display: flex; align-items: center; gap: 10px; text-align: left; }
+nav button.active, nav button:hover { background: #263448; color: #fff; }
+.workspace { padding: 26px; overflow: auto; }
+header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 22px; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { font-size: 28px; margin-bottom: 4px; }
+h2 { font-size: 18px; margin-bottom: 16px; }
+.switcher { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.switcher .selected, .form button, .stack button, .job button:not(:disabled), .panel > button { background: #2364d2; color: #fff; border-color: #2364d2; font-weight: 700; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin-bottom: 18px; }
+.stat, .panel, .job, .mini { background: #fff; border: 1px solid #dce5ef; border-radius: 8px; box-shadow: 0 12px 34px rgba(16,24,40,.06); }
+.stat { padding: 18px; display: grid; gap: 5px; }
+.stat svg { color: #2364d2; }
+.stat strong { font-size: 22px; word-break: break-word; }
+.panel { padding: 20px; margin-bottom: 18px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.search { border: 1px solid #cdd9e5; background: #f8fbfe; border-radius: 8px; display: flex; align-items: center; gap: 8px; padding: 0 10px; margin-bottom: 14px; max-width: 430px; }
+.search input { border: 0; background: transparent; outline: 0; padding: 11px 0; width: 100%; }
+.job { padding: 16px; display: grid; gap: 10px; margin-bottom: 12px; }
+.job h3 { margin-bottom: 4px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chips span { background: #eef6ff; color: #1e518f; border-radius: 999px; padding: 5px 9px; font-size: 13px; }
+.badge { display: inline-flex; width: fit-content; border-radius: 999px; padding: 5px 9px; background: #fff1f0; color: #b42318; font-size: 12px; font-weight: 700; }
+.badge.good { background: #e8f8ef; color: #176b4a; }
+.job button:disabled { opacity: .5; cursor: not-allowed; }
+.mini { padding: 14px; margin-bottom: 12px; }
+.mini span, .company span { display: block; color: #667085; }
+.mini ul { margin: 0; padding-left: 18px; }
+.form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.form label, .stack { display: grid; gap: 6px; }
+.wide { grid-column: 1 / -1; }
+input, textarea, select { border: 1px solid #cdd9e5; border-radius: 8px; padding: 10px 12px; background: #fff; color: #182233; }
+textarea { min-height: 96px; resize: vertical; }
+.stack { gap: 10px; }
+.company { display: flex; gap: 16px; align-items: flex-start; }
+.company svg { color: #2364d2; }
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 720px; }
+th, td { padding: 12px; border-bottom: 1px solid #e4ebf3; text-align: left; vertical-align: middle; }
+th { background: #f7fafc; color: #475467; font-size: 13px; }
+td button { margin-right: 6px; }
+.bar { display: grid; grid-template-columns: 70px 1fr 30px; gap: 10px; align-items: center; margin-bottom: 12px; }
+.bar i { display: block; height: 12px; border-radius: 999px; background: #45c08a; }
+@media (max-width: 950px) {
+  main { grid-template-columns: 1fr; }
+  nav { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  header { align-items: flex-start; flex-direction: column; }
+  .stats, .grid, .form { grid-template-columns: 1fr; }
+}
