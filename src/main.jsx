@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { Bell, Briefcase, Building2, Calendar, CheckCircle2, FileText, GraduationCap, LayoutDashboard, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
 import "./styles.css";
@@ -18,20 +18,16 @@ const drivesSeed = [
   { id: "d2", recruiterId: "r2", company: "DataVista Labs", role: "Data Analyst Trainee", description: "Prepare SQL reports and business dashboards.", skills: ["Python", "SQL", "Excel", "Power BI"], minCgpa: 7, branches: ["CSE", "IT", "ECE"], maxBacklogs: 1, package: "3.8 LPA", deadline: "2026-07-03", date: "2026-07-12", status: "pending" },
 ];
 
-const users = [
-  { role: "student", name: "Student", ref: "s1" },
-  { role: "recruiter", name: "Recruiter", ref: "r1" },
-  { role: "admin", name: "Placement Officer", ref: "admin" },
-];
-
 function nice(value) {
+  if (!value) return "";
   return value.replaceAll("_", " ").replace(/\b\w/g, (x) => x.toUpperCase());
 }
 
 function eligibility(student, drive) {
-  const studentSkills = student.skills.map((s) => s.toLowerCase());
-  const matched = drive.skills.filter((s) => studentSkills.includes(s.toLowerCase()));
-  const missing = drive.skills.filter((s) => !studentSkills.includes(s.toLowerCase()));
+  if (!student || !drive) return { ok: false, reasons: ["No context"], matched: [], missing: [] };
+  const studentSkills = (student.skills || []).map((s) => s.toLowerCase());
+  const matched = (drive.skills || []).filter((s) => studentSkills.includes(s.toLowerCase()));
+  const missing = (drive.skills || []).filter((s) => !studentSkills.includes(s.toLowerCase()));
   const reasons = [];
   if (student.cgpa < drive.minCgpa) reasons.push("CGPA below requirement");
   if (!drive.branches.includes(student.department)) reasons.push("Branch not eligible");
@@ -42,43 +38,248 @@ function eligibility(student, drive) {
 }
 
 function aiAnalysis(student, drives) {
+  if (!student) return { score: 0, tips: [], missing: [], roles: [], topics: [], plan: [] };
   let score = 25;
   const tips = [];
-  if (student.resume.length > 70) score += 15; else tips.push("Add more project and internship details to the resume.");
-  if (student.skills.length >= 4) score += 15; else tips.push("Add more job-related technical skills.");
-  if (student.certifications.length) score += 10; else tips.push("Add certifications or workshop achievements.");
+  if ((student.resume || "").length > 70) score += 15; else tips.push("Add more project and internship details to the resume.");
+  if ((student.skills || []).length >= 4) score += 15; else tips.push("Add more job-related technical skills.");
+  if ((student.certifications || []).length) score += 10; else tips.push("Add certifications or workshop achievements.");
   if (student.github) score += 10; else tips.push("Add a GitHub profile link.");
   if (student.linkedin) score += 10; else tips.push("Add a LinkedIn profile link.");
-  if (/project|internship|github/i.test(student.resume)) score += 15; else tips.push("Mention projects, GitHub repositories, and achievements.");
+  if (/project|internship|github/i.test(student.resume || "")) score += 15; else tips.push("Mention projects, GitHub repositories, and achievements.");
   const target = drives.find((d) => d.status === "open") || drives[0];
   const gap = target ? eligibility(student, target).missing : [];
   return {
     score: Math.min(score, 100),
     tips: tips.length ? tips : ["Resume is strong. Keep updating it with new projects."],
     missing: gap.length ? gap : ["No major skill gap for the selected drive."],
-    roles: student.skills.includes("SQL") ? ["Data Analyst", "BI Intern", "Junior Data Engineer"] : ["Frontend Developer", "Web Developer Intern", "Software Developer Intern"],
+    roles: (student.skills || []).includes("SQL") ? ["Data Analyst", "BI Intern", "Junior Data Engineer"] : ["Frontend Developer", "Web Developer Intern", "Software Developer Intern"],
     topics: ["Aptitude", "HR questions", "Projects explanation", ...gap],
     plan: ["Week 1: Update resume and revise aptitude.", "Week 2: Learn missing skills.", "Week 3: Build one mini project and upload to GitHub.", "Week 4: Practice mock interviews and apply to drives."],
   };
 }
 
+const getLocalStorageItem = (key, seed) => {
+  const data = localStorage.getItem(key);
+  return data ? JSON.parse(data) : seed;
+};
+
+function AuthScreen({ onLogin, students, setStudents, recruiters, setRecruiters }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [role, setRole] = useState("student");
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const email = f.get("email");
+    const password = f.get("password");
+    const name = f.get("name");
+
+    const isFirebaseDemo = !import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY === "demo-api-key";
+
+    if (isLogin) {
+      if (isFirebaseDemo) {
+        if (email === "admin@admin.com" && password === "admin123") {
+          onLogin({ role: "admin", name: "Placement Officer", email, uid: "admin" });
+          return;
+        }
+
+        if (role === "student") {
+          const st = students.find(s => s.email === email);
+          if (st) {
+            onLogin({ role: "student", name: st.name, email, ref: st.id, uid: st.id });
+          } else {
+            setError("Student account not found or invalid credentials.");
+          }
+        } else if (role === "recruiter") {
+          const rc = recruiters.find(r => r.email === email);
+          if (rc) {
+            onLogin({ role: "recruiter", name: rc.name, email, ref: rc.id, uid: rc.id });
+          } else {
+            setError("Recruiter account not found or invalid credentials.");
+          }
+        }
+      } else {
+        import("./firebase").then(({ auth }) => {
+          import("firebase/auth").then(({ signInWithEmailAndPassword }) => {
+            signInWithEmailAndPassword(auth, email, password)
+              .then((userCredential) => {
+                const u = userCredential.user;
+                let userRole = role;
+                if (email.includes("admin")) userRole = "admin";
+                onLogin({ role: userRole, name: u.displayName || name || "User", email, uid: u.uid });
+              })
+              .catch((err) => {
+                setError(err.message);
+              });
+          });
+        });
+      }
+    } else {
+      if (isFirebaseDemo) {
+        const uid = `u_${Date.now()}`;
+        if (role === "student") {
+          const newStudent = { id: uid, name, email, department: f.get("department") || "CSE", semester: "S6", cgpa: Number(f.get("cgpa")) || 8.0, backlogs: 0, skills: [], certifications: [], resume: "", github: "", linkedin: "", verified: false };
+          setStudents([...students, newStudent]);
+          onLogin({ role: "student", name, email, ref: uid, uid });
+        } else if (role === "recruiter") {
+          const newRecruiter = { id: uid, name, email, company: f.get("company") || "Company Name", designation: f.get("designation") || "HR Manager", status: "pending" };
+          setRecruiters([...recruiters, newRecruiter]);
+          onLogin({ role: "recruiter", name, email, ref: uid, uid });
+        }
+      } else {
+        import("./firebase").then(({ auth, db }) => {
+          import("firebase/auth").then(({ createUserWithEmailAndPassword, updateProfile }) => {
+            createUserWithEmailAndPassword(auth, email, password)
+              .then((userCredential) => {
+                const u = userCredential.user;
+                updateProfile(u, { displayName: name }).then(() => {
+                  import("firebase/firestore").then(({ doc, setDoc }) => {
+                    const userRef = doc(db, "users", u.uid);
+                    setDoc(userRef, { uid: u.uid, name, email, role, status: role === "student" ? "active" : "pending" }).then(() => {
+                      onLogin({ role, name, email, uid: u.uid });
+                    });
+                  });
+                });
+              })
+              .catch((err) => {
+                setError(err.message);
+              });
+          });
+        });
+      }
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-box">
+        <div className="brand" style={{ justifyContent: "center", marginBottom: "15px" }}>
+          <ShieldCheck size={28} />
+          <div><strong>CampusPlace AI</strong><span>Placement Portal</span></div>
+        </div>
+        <h2>{isLogin ? "Sign In" : "Create Account"}</h2>
+        {error && <div className="error-message">{error}</div>}
+        <form onSubmit={handleSubmit} className="stack">
+          {!isLogin && (
+            <label>Full Name
+              <input name="name" required placeholder="John Doe" />
+            </label>
+          )}
+          <label>Email Address
+            <input type="email" name="email" required placeholder="name@domain.com" />
+          </label>
+          <label>Password
+            <input type="password" name="password" required placeholder="••••••••" />
+          </label>
+
+          <label>Select Role
+            <select value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="student">Student</option>
+              <option value="recruiter">Recruiter</option>
+              <option value="admin">Placement Officer (Admin)</option>
+            </select>
+          </label>
+
+          {!isLogin && role === "student" && (
+            <>
+              <label>Department
+                <input name="department" required placeholder="CSE, ECE, ME" />
+              </label>
+              <label>Current CGPA
+                <input name="cgpa" type="number" step="0.01" required placeholder="8.5" />
+              </label>
+            </>
+          )}
+
+          {!isLogin && role === "recruiter" && (
+            <>
+              <label>Company Name
+                <input name="company" required placeholder="Google Inc." />
+              </label>
+              <label>Designation
+                <input name="designation" required placeholder="HR Manager" />
+              </label>
+            </>
+          )}
+
+          <button type="submit" className="selected" style={{ marginTop: "10px" }}>{isLogin ? "Sign In" : "Register"}</button>
+        </form>
+
+        <p className="toggle-auth">
+          {isLogin ? "Don't have an account? " : "Already have an account? "}
+          <span onClick={() => { setIsLogin(!isLogin); setError(""); }} style={{ color: "#2364d2", cursor: "pointer", fontWeight: "bold", textDecoration: "underline" }}>
+            {isLogin ? "Register here" : "Sign in here"}
+          </span>
+        </p>
+
+        {isLogin && (
+          <div className="demo-hint">
+            <p><strong>Demo Accounts:</strong></p>
+            <p>🎓 Student: <code>anjana@student.edu</code> (any password)</p>
+            <p>💼 Recruiter: <code>meera@innovatech.com</code> (any password)</p>
+            <p>🛡️ Admin: <code>admin@admin.com</code> / password: <code>admin123</code></p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const [user, setUser] = useState(users[0]);
+  const [currentUser, setCurrentUser] = useState(() => getLocalStorageItem("cp_user", null));
   const [page, setPage] = useState("dashboard");
-  const [students, setStudents] = useState(studentsSeed);
-  const [recruiters, setRecruiters] = useState(recruitersSeed);
-  const [drives, setDrives] = useState(drivesSeed);
-  const [apps, setApps] = useState([{ id: "a1", studentId: "s1", driveId: "d1", student: "Anjana Varghese", company: "InnovaTech Solutions", role: "Frontend Developer Intern", status: "interview_scheduled", date: "2026-06-20" }]);
-  const [interviews, setInterviews] = useState([{ id: "i1", appId: "a1", studentId: "s1", driveId: "d1", date: "2026-07-06", time: "10:30 AM", mode: "Online", link: "https://meet.example/interview" }]);
-  const [notifications, setNotifications] = useState(["Interview scheduled for InnovaTech Solutions.", "DataVista Labs drive is waiting for admin approval."]);
+  const [students, setStudents] = useState(() => getLocalStorageItem("cp_students", studentsSeed));
+  const [recruiters, setRecruiters] = useState(() => getLocalStorageItem("cp_recruiters", recruitersSeed));
+  const [drives, setDrives] = useState(() => getLocalStorageItem("cp_drives", drivesSeed));
+  const [apps, setApps] = useState(() => getLocalStorageItem("cp_apps", [{ id: "a1", studentId: "s1", driveId: "d1", student: "Anjana Varghese", company: "InnovaTech Solutions", role: "Frontend Developer Intern", status: "interview_scheduled", date: "2026-06-20" }]));
+  const [interviews, setInterviews] = useState(() => getLocalStorageItem("cp_interviews", [{ id: "i1", appId: "a1", studentId: "s1", driveId: "d1", date: "2026-07-06", time: "10:30 AM", mode: "Online", link: "https://meet.example/interview" }]));
+  const [notifications, setNotifications] = useState(() => getLocalStorageItem("cp_notifications", ["Interview scheduled for InnovaTech Solutions.", "DataVista Labs drive is waiting for admin approval."]));
   const [query, setQuery] = useState("");
 
-  const student = students.find((s) => s.id === user.ref) || students[0];
-  const recruiter = recruiters.find((r) => r.id === user.ref) || recruiters[0];
-  const openDrives = drives.filter((d) => d.status === "open");
-  const recruiterDrives = drives.filter((d) => d.recruiterId === recruiter.id);
-  const recruiterApps = apps.filter((a) => recruiterDrives.some((d) => d.id === a.driveId));
-  const analysis = aiAnalysis(student, drives);
+  useEffect(() => {
+    localStorage.setItem("cp_user", JSON.stringify(currentUser));
+  }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem("cp_students", JSON.stringify(students));
+  }, [students]);
+
+  useEffect(() => {
+    localStorage.setItem("cp_recruiters", JSON.stringify(recruiters));
+  }, [recruiters]);
+
+  useEffect(() => {
+    localStorage.setItem("cp_drives", JSON.stringify(drives));
+  }, [drives]);
+
+  useEffect(() => {
+    localStorage.setItem("cp_apps", JSON.stringify(apps));
+  }, [apps]);
+
+  useEffect(() => {
+    localStorage.setItem("cp_interviews", JSON.stringify(interviews));
+  }, [interviews]);
+
+  useEffect(() => {
+    localStorage.setItem("cp_notifications", JSON.stringify(notifications));
+  }, [notifications]);
+
+  const student = useMemo(() => {
+    if (!currentUser || currentUser.role !== "student") return null;
+    return students.find((s) => s.email === currentUser.email) || students[0];
+  }, [currentUser, students]);
+
+  const recruiter = useMemo(() => {
+    if (!currentUser || currentUser.role !== "recruiter") return null;
+    return recruiters.find((r) => r.email === currentUser.email) || recruiters[0];
+  }, [currentUser, recruiters]);
+
+  const openDrives = useMemo(() => drives.filter((d) => d.status === "open"), [drives]);
+  const recruiterDrives = useMemo(() => recruiter ? drives.filter((d) => d.recruiterId === recruiter.id) : [], [drives, recruiter]);
+  const recruiterApps = useMemo(() => apps.filter((a) => recruiterDrives.some((d) => d.id === a.driveId)), [apps, recruiterDrives]);
+  const analysis = useMemo(() => student ? aiAnalysis(student, drives) : null, [student, drives]);
 
   const stats = useMemo(() => ({
     students: students.length,
@@ -93,6 +294,7 @@ function App() {
   }
 
   function apply(drive) {
+    if (!student) return;
     if (apps.some((a) => a.studentId === student.id && a.driveId === drive.id)) return;
     if (!eligibility(student, drive).ok) return;
     setApps([{ id: `a${Date.now()}`, studentId: student.id, driveId: drive.id, student: student.name, company: drive.company, role: drive.role, status: "applied", date: "2026-06-22" }, ...apps]);
@@ -110,6 +312,7 @@ function App() {
 
   function addDrive(e) {
     e.preventDefault();
+    if (!recruiter) return;
     const f = new FormData(e.currentTarget);
     setDrives([{ id: `d${Date.now()}`, recruiterId: recruiter.id, company: recruiter.company, role: f.get("role"), description: f.get("description"), skills: split(f.get("skills")), minCgpa: Number(f.get("cgpa")), branches: split(f.get("branches")), maxBacklogs: Number(f.get("backlogs")), package: f.get("package"), deadline: f.get("deadline"), date: f.get("date"), status: "pending" }, ...drives]);
     notify(`${recruiter.company} submitted a new placement drive for approval.`);
@@ -118,36 +321,45 @@ function App() {
 
   function saveStudent(e) {
     e.preventDefault();
+    if (!student) return;
     const f = new FormData(e.currentTarget);
     const updated = { ...student, name: f.get("name"), department: f.get("department"), semester: f.get("semester"), cgpa: Number(f.get("cgpa")), backlogs: Number(f.get("backlogs")), skills: split(f.get("skills")), certifications: split(f.get("certifications")), resume: f.get("resume"), github: f.get("github"), linkedin: f.get("linkedin") };
     setStudents(students.map((s) => s.id === student.id ? updated : s));
   }
 
-  const profileCompletion = Math.round(([student.email, student.cgpa, student.skills.length, student.resume, student.github, student.linkedin].filter(Boolean).length / 6) * 100);
-  const nav = user.role === "student" ? ["dashboard", "profile", "drives", "applications", "ai", "notifications"] : user.role === "recruiter" ? ["dashboard", "company", "manage drives", "applicants", "notifications"] : ["dashboard", "students", "recruiters", "approvals", "reports", "notifications"];
+  if (!currentUser) {
+    return <AuthScreen onLogin={(u) => { setCurrentUser(u); setPage("dashboard"); }} students={students} setStudents={setStudents} recruiters={recruiters} setRecruiters={setRecruiters} />;
+  }
+
+  const profileCompletion = student ? Math.round(([student.email, student.cgpa, (student.skills || []).length, student.resume, student.github, student.linkedin].filter(Boolean).length / 6) * 100) : 0;
+  const nav = currentUser.role === "student" ? ["dashboard", "profile", "drives", "applications", "ai", "notifications"] : currentUser.role === "recruiter" ? ["dashboard", "company", "manage drives", "applicants", "notifications"] : ["dashboard", "students", "recruiters", "approvals", "reports", "notifications"];
 
   return (
     <main>
-      <aside>
-        <div className="brand"><ShieldCheck /><div><strong>CampusPlace AI</strong><span>Placement Portal</span></div></div>
-        <nav>{nav.map((item) => <button key={item} onClick={() => setPage(item)} className={page === item ? "active" : ""}>{icon(item)} {nice(item)}</button>)}</nav>
+      <aside style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div>
+          <div className="brand"><ShieldCheck /><div><strong>CampusPlace AI</strong><span>Placement Portal</span></div></div>
+          <nav>{nav.map((item) => <button key={item} onClick={() => setPage(item)} className={page === item ? "active" : ""}>{icon(item)} {nice(item)}</button>)}</nav>
+        </div>
+        <button onClick={() => setCurrentUser(null)} style={{ background: "transparent", color: "#f8fafc", border: "1px solid rgba(255,255,255,0.2)", padding: "10px", width: "100%", borderRadius: "8px", cursor: "pointer", display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
+          Log Out
+        </button>
       </aside>
       <section className="workspace">
         <header>
-          <div><h1>{nice(user.role)} {nice(page)}</h1><p>{user.role === "student" ? student.name : user.role === "recruiter" ? recruiter.name : "Placement officer/admin"}</p></div>
-          <div className="switcher">{users.map((u) => <button key={u.role} className={u.role === user.role ? "selected" : ""} onClick={() => { setUser(u); setPage("dashboard"); }}>{nice(u.role)}</button>)}</div>
+          <div><h1>{nice(currentUser.role)} {nice(page)}</h1><p>{currentUser.role === "student" ? student?.name : currentUser.role === "recruiter" ? recruiter?.company : "Placement officer/admin"}</p></div>
         </header>
 
-        {page === "dashboard" && user.role === "student" && <StudentDash student={student} drives={openDrives} apps={apps} interviews={interviews} analysis={analysis} profileCompletion={profileCompletion} />}
-        {page === "dashboard" && user.role === "recruiter" && <RecruiterDash recruiter={recruiter} drives={recruiterDrives} apps={recruiterApps} />}
-        {page === "dashboard" && user.role === "admin" && <AdminDash stats={stats} students={students} apps={apps} />}
-        {page === "profile" && <Profile student={student} saveStudent={saveStudent} />}
-        {page === "drives" && <Drives drives={openDrives} student={student} apps={apps} apply={apply} query={query} setQuery={setQuery} />}
-        {page === "applications" && <Applications apps={apps.filter((a) => a.studentId === student.id)} interviews={interviews} />}
-        {page === "ai" && <AI analysis={analysis} />}
-        {page === "company" && <Company recruiter={recruiter} />}
-        {page === "manage drives" && <ManageDrives drives={recruiterDrives} addDrive={addDrive} />}
-        {page === "applicants" && <Applicants apps={recruiterApps} students={students} updateStatus={updateStatus} />}
+        {page === "dashboard" && currentUser.role === "student" && student && <StudentDash student={student} drives={openDrives} apps={apps} interviews={interviews} analysis={analysis} profileCompletion={profileCompletion} />}
+        {page === "dashboard" && currentUser.role === "recruiter" && recruiter && <RecruiterDash recruiter={recruiter} drives={recruiterDrives} apps={recruiterApps} />}
+        {page === "dashboard" && currentUser.role === "admin" && <AdminDash stats={stats} students={students} apps={apps} />}
+        {page === "profile" && student && <Profile student={student} saveStudent={saveStudent} />}
+        {page === "drives" && student && <Drives drives={openDrives} student={student} apps={apps} apply={apply} query={query} setQuery={setQuery} />}
+        {page === "applications" && student && <Applications apps={apps.filter((a) => a.studentId === student.id)} interviews={interviews} />}
+        {page === "ai" && analysis && <AI analysis={analysis} />}
+        {page === "company" && recruiter && <Company recruiter={recruiter} />}
+        {page === "manage drives" && recruiter && <ManageDrives drives={recruiterDrives} addDrive={addDrive} />}
+        {page === "applicants" && recruiter && <Applicants apps={recruiterApps} students={students} updateStatus={updateStatus} />}
         {page === "students" && <Students students={students} setStudents={setStudents} />}
         {page === "recruiters" && <Recruiters recruiters={recruiters} setRecruiters={setRecruiters} />}
         {page === "approvals" && <Approvals drives={drives} setDrives={setDrives} notify={notify} />}
@@ -181,7 +393,7 @@ function Badge({ value, good }) {
 
 function StudentDash({ student, drives, apps, interviews, analysis, profileCompletion }) {
   const eligible = drives.filter((d) => eligibility(student, d).ok);
-  return <><div className="stats"><Stat label="Profile" value={`${profileCompletion}%`} Icon={GraduationCap} /><Stat label="Eligible Drives" value={eligible.length} Icon={Briefcase} /><Stat label="Applications" value={apps.filter((a) => a.studentId === student.id).length} Icon={FileText} /><Stat label="Resume Score" value={`${analysis.score}/100`} Icon={Sparkles} /></div><div className="grid"><Panel title="Recommended Drives">{eligible.map((d) => <Job key={d.id} drive={d} student={student} compact />)}</Panel><Panel title="Interview Schedules">{interviews.filter((i) => i.studentId === student.id).map((i) => <div className="mini" key={i.id}><strong>{i.date} at {i.time}</strong><span>{i.mode}: {i.link}</span></div>)}</Panel></div></>;
+  return <><div className="stats"><Stat label="Profile" value={`${profileCompletion}%`} Icon={GraduationCap} /><Stat label="Eligible Drives" value={eligible.length} Icon={Briefcase} /><Stat label="Applications" value={apps.filter((a) => a.studentId === student.id).length} Icon={FileText} /><Stat label="Resume Score" value={`${analysis?.score || 0}/100`} Icon={Sparkles} /></div><div className="grid"><Panel title="Recommended Drives">{eligible.map((d) => <Job key={d.id} drive={d} student={student} compact />)}</Panel><Panel title="Interview Schedules">{interviews.filter((i) => i.studentId === student.id).map((i) => <div className="mini" key={i.id}><strong>{i.date} at {i.time}</strong><span>{i.mode}: {i.link}</span></div>)}</Panel></div></>;
 }
 
 function RecruiterDash({ recruiter, drives, apps }) {
@@ -193,17 +405,17 @@ function AdminDash({ stats, students, apps }) {
 }
 
 function Profile({ student, saveStudent }) {
-  return <Panel title="Student Profile Management"><form className="form" onSubmit={saveStudent}>{["name", "department", "semester", "cgpa", "backlogs", "github", "linkedin"].map((k) => <label key={k}>{nice(k)}<input name={k} defaultValue={student[k]} /></label>)}<label>Skills<input name="skills" defaultValue={student.skills.join(", ")} /></label><label>Certifications<input name="certifications" defaultValue={student.certifications.join(", ")} /></label><label className="wide">Resume Text<textarea name="resume" defaultValue={student.resume} /></label><button>Save Profile</button></form></Panel>;
+  return <Panel title="Student Profile Management"><form className="form" onSubmit={saveStudent}>{["name", "department", "semester", "cgpa", "backlogs", "github", "linkedin"].map((k) => <label key={k}>{nice(k)}<input name={k} defaultValue={student[k] || ""} /></label>)}<label>Skills<input name="skills" defaultValue={(student.skills || []).join(", ")} /></label><label>Certifications<input name="certifications" defaultValue={(student.certifications || []).join(", ")} /></label><label className="wide">Resume Text<textarea name="resume" defaultValue={student.resume || ""} /></label><button type="submit">Save Profile</button></form></Panel>;
 }
 
 function Drives({ drives, student, apps, apply, query, setQuery }) {
-  const filtered = drives.filter((d) => `${d.company} ${d.role} ${d.skills.join(" ")}`.toLowerCase().includes(query.toLowerCase()));
+  const filtered = drives.filter((d) => `${d.company} ${d.role} ${(d.skills || []).join(" ")}`.toLowerCase().includes(query.toLowerCase()));
   return <Panel title="Eligible Companies and Placement Drives"><div className="search"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company, role or skill" /></div>{filtered.map((d) => <Job key={d.id} drive={d} student={student} applied={apps.some((a) => a.driveId === d.id && a.studentId === student.id)} apply={apply} />)}</Panel>;
 }
 
 function Job({ drive, student, applied, apply, compact }) {
   const e = eligibility(student, drive);
-  return <article className="job"><div><h3>{drive.role}</h3><p>{drive.company} - {drive.package}</p></div><Badge value={e.ok ? "Eligible to Apply" : "Not Eligible"} good={e.ok} /><div className="chips">{drive.skills.map((s) => <span key={s}>{s}</span>)}</div>{!compact && <><p>{drive.description}</p><small>{e.ok ? `Deadline: ${drive.deadline}` : e.reasons.join(", ")}</small><button disabled={!e.ok || applied} onClick={() => apply(drive)}>{applied ? "Applied" : "Apply Now"}</button></>}</article>;
+  return <article className="job"><div><h3>{drive.role}</h3><p>{drive.company} - {drive.package}</p></div><Badge value={e.ok ? "Eligible to Apply" : "Not Eligible"} good={e.ok} /><div className="chips">{(drive.skills || []).map((s) => <span key={s}>{s}</span>)}</div>{!compact && <><p>{drive.description}</p><small>{e.ok ? `Deadline: ${drive.deadline}` : e.reasons.join(", ")}</small><button disabled={!e.ok || applied} onClick={() => apply(drive)}>{applied ? "Applied" : "Apply Now"}</button></>}</article>;
 }
 
 function Applications({ apps, interviews }) {
@@ -211,7 +423,7 @@ function Applications({ apps, interviews }) {
 }
 
 function AI({ analysis }) {
-  return <Panel title="AI Resume Analysis, Skill Gap and Recommendation"><div className="stats"><Stat label="Resume Score" value={`${analysis.score}/100`} Icon={Sparkles} /><Stat label="Best Role" value={analysis.roles[0]} Icon={Briefcase} /></div><div className="grid"><List title="Resume Tips" items={analysis.tips} /><List title="Missing Skills" items={analysis.missing} /><List title="Interview Topics" items={analysis.topics} /><List title="30-Day Plan" items={analysis.plan} /></div></Panel>;
+  return <Panel title="AI Resume Analysis, Skill Gap and Recommendation"><div className="stats"><Stat label="Resume Score" value={`${analysis?.score || 0}/100`} Icon={Sparkles} /><Stat label="Best Role" value={analysis?.roles?.[0] || ""} Icon={Briefcase} /></div><div className="grid"><List title="Resume Tips" items={analysis?.tips || []} /><List title="Missing Skills" items={analysis?.missing || []} /><List title="Interview Topics" items={analysis?.topics || []} /><List title="30-Day Plan" items={analysis?.plan || []} /></div></Panel>;
 }
 
 function List({ title, items }) {
@@ -223,7 +435,7 @@ function Company({ recruiter }) {
 }
 
 function ManageDrives({ drives, addDrive }) {
-  return <div className="grid"><Panel title="Create Placement Drive"><form className="stack" onSubmit={addDrive}><input name="role" placeholder="Job role" required /><textarea name="description" placeholder="Job description" required /><input name="skills" placeholder="Required skills: React, Firebase" required /><input name="cgpa" type="number" step="0.1" placeholder="Minimum CGPA" required /><input name="branches" placeholder="Branches: CSE, IT" required /><input name="backlogs" type="number" placeholder="Max backlogs" required /><input name="package" placeholder="Package" required /><input name="date" type="date" required /><input name="deadline" type="date" required /><button>Submit for Approval</button></form></Panel><Panel title="Manage Drives"><DriveRows drives={drives} /></Panel></div>;
+  return <div className="grid"><Panel title="Create Placement Drive"><form className="stack" onSubmit={addDrive}><input name="role" placeholder="Job role" required /><textarea name="description" placeholder="Job description" required /><input name="skills" placeholder="Required skills: React, Firebase" required /><input name="cgpa" type="number" step="0.1" placeholder="Minimum CGPA" required /><input name="branches" placeholder="Branches: CSE, IT" required /><input name="backlogs" type="number" placeholder="Max backlogs" required /><input name="package" placeholder="Package" required /><input name="date" type="date" required /><input name="deadline" type="date" required /><button type="submit">Submit for Approval</button></form></Panel><Panel title="Manage Drives"><DriveRows drives={drives} /></Panel></div>;
 }
 
 function DriveTable({ drives }) {
@@ -231,11 +443,11 @@ function DriveTable({ drives }) {
 }
 
 function DriveRows({ drives }) {
-  return <Table heads={["Company", "Role", "CGPA", "Branches", "Status"]}>{drives.map((d) => <tr key={d.id}><td>{d.company}</td><td>{d.role}</td><td>{d.minCgpa}</td><td>{d.branches.join(", ")}</td><td><Badge value={nice(d.status)} good={d.status === "open"} /></td></tr>)}</Table>;
+  return <Table heads={["Company", "Role", "CGPA", "Branches", "Status"]}>{drives.map((d) => <tr key={d.id}><td>{d.company}</td><td>{d.role}</td><td>{d.minCgpa}</td><td>{(d.branches || []).join(", ")}</td><td><Badge value={nice(d.status)} good={d.status === "open"} /></td></tr>)}</Table>;
 }
 
 function Applicants({ apps, students, updateStatus }) {
-  return <Panel title="Applicants, Shortlisting, Interviews and Results"><Table heads={["Student", "Role", "CGPA", "Skills", "Status", "Action"]}>{apps.map((a) => { const s = students.find((x) => x.id === a.studentId); return <tr key={a.id}><td>{a.student}</td><td>{a.role}</td><td>{s?.cgpa}</td><td>{s?.skills.join(", ")}</td><td>{nice(a.status)}</td><td><select value={a.status} onChange={(e) => updateStatus(a.id, e.target.value)}>{["applied", "shortlisted", "interview_scheduled", "selected", "rejected"].map((x) => <option key={x} value={x}>{nice(x)}</option>)}</select></td></tr>; })}</Table></Panel>;
+  return <Panel title="Applicants, Shortlisting, Interviews and Results"><Table heads={["Student", "Role", "CGPA", "Skills", "Status", "Action"]}>{apps.map((a) => { const s = students.find((x) => x.id === a.studentId); return <tr key={a.id}><td>{a.student}</td><td>{a.role}</td><td>{s?.cgpa}</td><td>{(s?.skills || []).join(", ")}</td><td>{nice(a.status)}</td><td><select value={a.status} onChange={(e) => updateStatus(a.id, e.target.value)}>{["applied", "shortlisted", "interview_scheduled", "selected", "rejected"].map((x) => <option key={x} value={x}>{nice(x)}</option>)}</select></td></tr>; })}</Table></Panel>;
 }
 
 function Students({ students, setStudents }) {
@@ -260,7 +472,7 @@ function Reports({ stats, students, apps }) {
 }
 
 function Department({ students, apps }) {
-  const depts = [...new Set(students.map((s) => s.department))];
+  const depts = useMemo(() => [...new Set(students.map((s) => s.department))], [students]);
   return <Panel title="Department-wise Placement Count">{depts.map((d) => { const ids = students.filter((s) => s.department === d).map((s) => s.id); const count = apps.filter((a) => a.status === "selected" && ids.includes(a.studentId)).length; return <div className="bar" key={d}><span>{d}</span><i style={{ width: `${Math.max(6, count * 50)}%` }} /><strong>{count}</strong></div>; })}</Panel>;
 }
 

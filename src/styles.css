@@ -59,3 +59,50 @@ td button { margin-right: 6px; }
   header { align-items: flex-start; flex-direction: column; }
   .stats, .grid, .form { grid-template-columns: 1fr; }
 }
+
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #edf3f8;
+  padding: 20px;
+}
+.auth-box {
+  background: #fff;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 12px 34px rgba(16,24,40,.06);
+  width: 100%;
+  max-width: 450px;
+  border: 1px solid #dce5ef;
+}
+.auth-box h2 {
+  margin-top: 15px;
+  margin-bottom: 20px;
+}
+.toggle-auth {
+  text-align: center;
+  margin-top: 15px;
+  font-size: 14px;
+}
+.demo-hint {
+  margin-top: 20px;
+  padding: 12px;
+  background: #f7fafc;
+  border-radius: 8px;
+  font-size: 12px;
+  border: 1px dashed #cdd9e5;
+}
+.demo-hint p {
+  margin: 4px 0;
+}
+.error-message {
+  background: #fff1f0;
+  color: #b42318;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 15px;
+}
+
