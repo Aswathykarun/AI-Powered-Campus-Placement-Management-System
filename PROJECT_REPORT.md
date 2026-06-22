@@ -71,4 +71,5 @@ The system enables three roles to work collaboratively:
 
 ## 10. Project URL / Repository Link / Deployment Link
 * **GitHub Repository:** [AI-Powered-Campus-Placement-Management-System](https://github.com/Aswathykarun/AI-Powered-Campus-Placement-Management-System)
-* **Deployment/Local Host:** [http://127.0.0.1:4173/](http://127.0.0.1:4173/) *(Local preview environment)*
+* **Live Deployment Link:** [https://aswathykarun.github.io/AI-Powered-Campus-Placement-Management-System/](https://aswathykarun.github.io/AI-Powered-Campus-Placement-Management-System/)
+* **Local Host Link:** [http://127.0.0.1:4173/](http://127.0.0.1:4173/) *(Local preview environment)*
